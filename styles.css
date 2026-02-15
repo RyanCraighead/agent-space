@@ -87,7 +87,7 @@ body {
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(80px, 1fr));
+  grid-template-columns: repeat(4, minmax(80px, 1fr));
   gap: 0.6rem;
 }
 
@@ -142,6 +142,12 @@ button:hover {
 
 button:active {
   transform: translateY(0);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+  transform: none;
 }
 
 input[type="range"] {
@@ -479,7 +485,7 @@ label {
   }
 
   .stats {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .topbar h1 {

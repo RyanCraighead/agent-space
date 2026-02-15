@@ -187,12 +187,14 @@ const ctx = canvas.getContext("2d");
 const ui = {
   toggleRun: document.getElementById("toggle-run"),
   regenWorld: document.getElementById("regen-world"),
+  toggleAi: document.getElementById("toggle-ai"),
   applyCount: document.getElementById("apply-count"),
   speed: document.getElementById("speed"),
   agentCount: document.getElementById("agent-count"),
   statAgents: document.getElementById("stat-agents"),
   statInteractions: document.getElementById("stat-interactions"),
   statSpeed: document.getElementById("stat-speed"),
+  statDialogue: document.getElementById("stat-dialogue"),
   selectedAgent: document.getElementById("selected-agent"),
   globalFeed: document.getElementById("global-feed"),
   agentRoster: document.getElementById("agent-roster"),
@@ -212,6 +214,12 @@ const state = {
   rosterDirty: true,
   selectedDirty: true,
   feedDirty: true,
+  aiEnabledByServer: false,
+  aiModeActive: false,
+  aiProviderModel: "zai-glm-4.7",
+  aiQueue: [],
+  aiInFlight: 0,
+  aiConcurrency: 2,
 };
 
 const palette = [
@@ -238,10 +246,14 @@ function init() {
   resizeCanvas();
   createWorld(SETTINGS.initialAgentCount);
   animateReveal();
+  loadAiConfig();
   requestAnimationFrame(loop);
 }
 
 function bindUi() {
+  ui.toggleAi.disabled = true;
+  ui.toggleAi.title = "Set CEREBRAS_API_KEY in the backend to enable AI dialogue.";
+
   ui.speed.addEventListener("input", () => {
     state.speedMultiplier = Number(ui.speed.value);
     ui.statSpeed.textContent = `${state.speedMultiplier.toFixed(1)}x`;
@@ -254,6 +266,16 @@ function bindUi() {
 
   ui.regenWorld.addEventListener("click", () => {
     createWorld(state.agents.length);
+  });
+
+  ui.toggleAi.addEventListener("click", () => {
+    if (!state.aiEnabledByServer) return;
+    state.aiModeActive = !state.aiModeActive;
+    if (!state.aiModeActive) {
+      state.aiQueue = [];
+    }
+    syncAiUi();
+    processAiQueue();
   });
 
   ui.applyCount.addEventListener("click", () => {
@@ -271,6 +293,32 @@ function animateReveal() {
   cards.forEach((card, idx) => {
     card.style.animationDelay = `${idx * 120}ms`;
   });
+}
+
+async function loadAiConfig() {
+  try {
+    const response = await fetch("/api/config");
+    if (!response.ok) throw new Error(`config_http_${response.status}`);
+    const config = await response.json();
+
+    state.aiEnabledByServer = Boolean(config.cerebrasEnabled);
+    state.aiProviderModel = config.model || "zai-glm-4.7";
+    state.aiModeActive = state.aiEnabledByServer;
+  } catch {
+    state.aiEnabledByServer = false;
+    state.aiModeActive = false;
+  }
+
+  syncAiUi();
+}
+
+function syncAiUi() {
+  ui.toggleAi.disabled = !state.aiEnabledByServer;
+  ui.toggleAi.textContent = state.aiModeActive ? "AI: On" : "AI: Off";
+  ui.statDialogue.textContent = state.aiModeActive ? "Cerebras" : "Local";
+  ui.toggleAi.title = state.aiEnabledByServer
+    ? `Model: ${state.aiProviderModel}`
+    : "Set CEREBRAS_API_KEY in the backend to enable AI dialogue.";
 }
 
 function resizeCanvas() {
@@ -476,12 +524,17 @@ function registerInteraction(a, b, timestamp) {
   state.rosterDirty = true;
   state.selectedDirty = true;
   state.feedDirty = true;
+
+  if (state.aiModeActive) {
+    enqueueAiInteraction(event, a, b);
+  }
 }
 
 function pushAgentMemory(self, other, event) {
   self.interactionCount += 1;
 
   self.interactionLog.unshift({
+    eventId: event.id,
     at: event.displayTime,
     withId: other.id,
     withName: other.name,
@@ -495,12 +548,98 @@ function pushAgentMemory(self, other, event) {
 
   const recentWithoutOther = self.recentContacts.filter((entry) => entry.withId !== other.id);
   recentWithoutOther.unshift({
+    eventId: event.id,
     withId: other.id,
     withName: other.name,
     at: event.displayTime,
     lastSummary: event.summary,
   });
   self.recentContacts = recentWithoutOther.slice(0, SETTINGS.maxRecentContacts);
+}
+
+function enqueueAiInteraction(event, a, b) {
+  state.aiQueue.push({
+    eventId: event.id,
+    a: serializeAgentForAi(a),
+    b: serializeAgentForAi(b),
+  });
+  processAiQueue();
+}
+
+function processAiQueue() {
+  if (!state.aiModeActive || !state.aiEnabledByServer) return;
+  while (state.aiInFlight < state.aiConcurrency && state.aiQueue.length > 0) {
+    const item = state.aiQueue.shift();
+    if (!item) break;
+    runAiJob(item);
+  }
+}
+
+async function runAiJob(item) {
+  state.aiInFlight += 1;
+  try {
+    const response = await fetch("/api/interaction", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        a: item.a,
+        b: item.b,
+      }),
+    });
+
+    if (!response.ok) return;
+    const data = await response.json();
+    applyAiInteraction(item.eventId, data);
+  } catch {
+    // Local dialogue remains as fallback when the API call fails.
+  } finally {
+    state.aiInFlight -= 1;
+    processAiQueue();
+  }
+}
+
+function applyAiInteraction(eventId, data) {
+  const event = state.globalFeed.find((entry) => entry.id === eventId);
+  if (!event) return;
+
+  const aLine = normalizeDialogLine(data.aLine, event.aName);
+  const bLine = normalizeDialogLine(data.bLine, event.bName);
+  const summary = normalizeSummary(data.summary);
+  if (!aLine || !bLine || !summary) return;
+
+  event.aLine = aLine;
+  event.bLine = bLine;
+  event.summary = summary;
+
+  for (const agent of state.agents) {
+    for (const logItem of agent.interactionLog) {
+      if (logItem.eventId !== eventId) continue;
+      logItem.summary = summary;
+      logItem.myLine = agent.id === event.aId ? aLine : bLine;
+      logItem.theirLine = agent.id === event.aId ? bLine : aLine;
+    }
+
+    for (const contact of agent.recentContacts) {
+      if (contact.eventId === eventId) {
+        contact.lastSummary = summary;
+      }
+    }
+  }
+
+  state.selectedDirty = true;
+  state.feedDirty = true;
+}
+
+function serializeAgentForAi(agent) {
+  return {
+    id: agent.id,
+    name: agent.name,
+    role: agent.role,
+    trait: agent.trait,
+    quirk: agent.quirk,
+    goal: agent.goal,
+    lifeStory: agent.lifeStory,
+  };
 }
 
 function generateDialogue(a, b) {
@@ -771,6 +910,20 @@ function normalizeAngle(angle) {
   while (angle > Math.PI) angle -= Math.PI * 2;
   while (angle < -Math.PI) angle += Math.PI * 2;
   return angle;
+}
+
+function normalizeDialogLine(value, speakerName) {
+  if (typeof value !== "string") return null;
+  const cleaned = value.trim().replace(/\s+/g, " ");
+  if (!cleaned) return null;
+  const startsWithName = cleaned.toLowerCase().startsWith(`${speakerName.split(" ")[0].toLowerCase()}:`);
+  return startsWithName ? cleaned : `${speakerName.split(" ")[0]}: "${cleaned}"`;
+}
+
+function normalizeSummary(value) {
+  if (typeof value !== "string") return null;
+  const cleaned = value.trim().replace(/\s+/g, " ");
+  return cleaned || null;
 }
 
 function escapeHtml(str) {

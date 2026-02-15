@@ -1,0 +1,16 @@
+{
+  "name": "agent-space",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Agent simulation web app with optional Cerebras-powered dialogue generation.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "@cerebras/cerebras_cloud_sdk": "^1.49.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0"
+  }
+}

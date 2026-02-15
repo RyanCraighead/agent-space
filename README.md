@@ -7,6 +7,7 @@ Web app sandbox where autonomous agents wander a 2D space, collide, and have gen
 - Overhead world simulation with randomly moving agents
 - Generated persona and mini life story per agent
 - Collision-driven interactions and live global feed
+- Optional Cerebras-powered dialogue generation via backend proxy
 - Per-agent history:
   - last 100 interaction log entries
   - last 100 recent contacts
@@ -14,16 +15,43 @@ Web app sandbox where autonomous agents wander a 2D space, collide, and have gen
 
 ## Run
 
-Serve the folder with any static server, then open the URL in your browser.
-
-PowerShell examples:
+1. Install dependencies:
 
 ```powershell
-# Python 3
-python -m http.server 8080
+npm install
+```
 
-# Node (if installed)
-npx serve .
+2. Create your local env file:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+3. Set `CEREBRAS_API_KEY` in `.env` (already gitignored).
+
+4. Start the app:
+
+```powershell
+npm start
+```
+
+5. Open:
+
+- `http://localhost:8080`
+
+## Cerebras defaults used
+
+- `model=zai-glm-4.7`
+- `temperature=1`
+- `top_p=0.95`
+- `clear_thinking=false` (preserve traces)
+- `disable_reasoning=false` (reasoning enabled)
+- `max_completion_tokens=1200` (adjust up to your workload needs)
+
+## Notes
+
+- API key is kept server-side in `server.js` via environment variables and is never sent to the browser.
+- If Cerebras is unavailable or returns invalid output, dialogue automatically falls back to local generation.
 ```
 
 Then visit:
