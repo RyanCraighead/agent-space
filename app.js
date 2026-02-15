@@ -7,6 +7,10 @@ const SETTINGS = {
   maxAgentLog: 100,
   maxRecentContacts: 100,
   maxGlobalFeed: 320,
+  minConversationPairs: 2,
+  maxConversationPairs: 6,
+  turnDelayMinMs: 320,
+  turnDelayMaxMs: 760,
 };
 
 const WORD_BANK = {
@@ -195,6 +199,10 @@ const ui = {
   statInteractions: document.getElementById("stat-interactions"),
   statSpeed: document.getElementById("stat-speed"),
   statDialogue: document.getElementById("stat-dialogue"),
+  statQueue: document.getElementById("stat-queue"),
+  statRps: document.getElementById("stat-rps"),
+  statTpm: document.getElementById("stat-tpm"),
+  statTpd: document.getElementById("stat-tpd"),
   selectedAgent: document.getElementById("selected-agent"),
   globalFeed: document.getElementById("global-feed"),
   agentRoster: document.getElementById("agent-roster"),
@@ -217,9 +225,13 @@ const state = {
   aiEnabledByServer: false,
   aiModeActive: false,
   aiProviderModel: "zai-glm-4.7",
-  aiQueue: [],
-  aiInFlight: 0,
-  aiConcurrency: 2,
+  activeConversationPairs: new Set(),
+  conversations: new Map(),
+  conversationCounter: 0,
+  turnQueue: [],
+  turnInFlight: 0,
+  turnConcurrency: 3,
+  limitsPollTimer: null,
 };
 
 const palette = [
@@ -247,6 +259,7 @@ function init() {
   createWorld(SETTINGS.initialAgentCount);
   animateReveal();
   loadAiConfig();
+  startLimitsPolling();
   requestAnimationFrame(loop);
 }
 
@@ -272,10 +285,10 @@ function bindUi() {
     if (!state.aiEnabledByServer) return;
     state.aiModeActive = !state.aiModeActive;
     if (!state.aiModeActive) {
-      state.aiQueue = [];
+      clearConversationState();
     }
     syncAiUi();
-    processAiQueue();
+    processTurnQueue();
   });
 
   ui.applyCount.addEventListener("click", () => {
@@ -304,6 +317,7 @@ async function loadAiConfig() {
     state.aiEnabledByServer = Boolean(config.cerebrasEnabled);
     state.aiProviderModel = config.model || "zai-glm-4.7";
     state.aiModeActive = state.aiEnabledByServer;
+    renderLimitStats(config.limits);
   } catch {
     state.aiEnabledByServer = false;
     state.aiModeActive = false;
@@ -319,6 +333,40 @@ function syncAiUi() {
   ui.toggleAi.title = state.aiEnabledByServer
     ? `Model: ${state.aiProviderModel}`
     : "Set CEREBRAS_API_KEY in the backend to enable AI dialogue.";
+}
+
+function startLimitsPolling() {
+  if (state.limitsPollTimer) return;
+  refreshLimits();
+  state.limitsPollTimer = window.setInterval(refreshLimits, 1200);
+}
+
+async function refreshLimits() {
+  try {
+    const response = await fetch("/api/limits");
+    if (!response.ok) return;
+    const payload = await response.json();
+    renderLimitStats(payload.limits, payload.usage, payload.queue);
+  } catch {
+    // Keep last known metrics on transient network errors.
+  }
+}
+
+function renderLimitStats(limits = {}, usage = {}, queue = {}) {
+  const rpsLimit = Number(limits.requestsPerSecond || limits.requests_per_second || 5);
+  const tpmLimit = Number(limits.tokensPerMinute || limits.tokens_per_minute || 1_000_000);
+  const tpdLimit = Number(limits.tokensPerDay || limits.tokens_per_day || 24_000_000);
+
+  const rpsUsed = Number(usage.requestsLastSecond || 0);
+  const tpmUsed = Number(usage.tokensLastMinute || 0);
+  const tpdUsed = Number(usage.tokensLastDay || 0);
+  const pending = Number(queue.pending || 0);
+  const inFlight = Number(queue.inFlight || 0);
+
+  ui.statRps.textContent = `${rpsUsed}/${rpsLimit}`;
+  ui.statTpm.textContent = `${formatCompactNumber(tpmUsed)}/${formatCompactNumber(tpmLimit)}`;
+  ui.statTpd.textContent = `${formatCompactNumber(tpdUsed)}/${formatCompactNumber(tpdLimit)}`;
+  ui.statQueue.textContent = `${pending}+${inFlight}`;
 }
 
 function resizeCanvas() {
@@ -338,6 +386,7 @@ function createWorld(agentCount) {
   state.recentBursts = [];
   state.interactionCounter = 0;
   state.selectedAgentId = null;
+  clearConversationState();
 
   for (let i = 0; i < agentCount; i += 1) {
     state.agents.push(makeAgent(i + 1));
@@ -473,17 +522,36 @@ function resolveCollisions(timestamp) {
       b.y += ny * overlap * 0.5;
 
       const pairKey = makePairKey(a.id, b.id);
+      if (state.activeConversationPairs.has(pairKey)) {
+        continue;
+      }
+
       const lastAt = state.pairLastInteraction.get(pairKey) || 0;
       if (timestamp - lastAt >= SETTINGS.interactionCooldownMs) {
         state.pairLastInteraction.set(pairKey, timestamp);
-        registerInteraction(a, b, timestamp);
+        if (state.aiModeActive && state.aiEnabledByServer) {
+          startAiConversation(a, b, pairKey, timestamp);
+        } else {
+          registerLocalInteraction(a, b, timestamp);
+        }
       }
     }
   }
 }
 
-function registerInteraction(a, b, timestamp) {
+function registerLocalInteraction(a, b, timestamp) {
   const convo = generateDialogue(a, b);
+  registerInteractionEvent({
+    a,
+    b,
+    timestamp,
+    aLine: convo.aLine,
+    bLine: convo.bLine,
+    summary: convo.summary,
+  });
+}
+
+function registerInteractionEvent({ a, b, timestamp, aLine, bLine, summary, conversationId = null }) {
   const when = new Date();
 
   const event = {
@@ -498,9 +566,10 @@ function registerInteraction(a, b, timestamp) {
     bId: b.id,
     aName: a.name,
     bName: b.name,
-    aLine: convo.aLine,
-    bLine: convo.bLine,
-    summary: convo.summary,
+    aLine,
+    bLine,
+    summary,
+    conversationId,
   };
 
   state.globalFeed.unshift(event);
@@ -524,10 +593,6 @@ function registerInteraction(a, b, timestamp) {
   state.rosterDirty = true;
   state.selectedDirty = true;
   state.feedDirty = true;
-
-  if (state.aiModeActive) {
-    enqueueAiInteraction(event, a, b);
-  }
 }
 
 function pushAgentMemory(self, other, event) {
@@ -557,77 +622,192 @@ function pushAgentMemory(self, other, event) {
   self.recentContacts = recentWithoutOther.slice(0, SETTINGS.maxRecentContacts);
 }
 
-function enqueueAiInteraction(event, a, b) {
-  state.aiQueue.push({
-    eventId: event.id,
-    a: serializeAgentForAi(a),
-    b: serializeAgentForAi(b),
+function startAiConversation(a, b, pairKey, timestamp) {
+  const sessionId = ++state.conversationCounter;
+  const openerId = Math.random() < 0.5 ? a.id : b.id;
+  const maxPairs = randInt(SETTINGS.minConversationPairs, SETTINGS.maxConversationPairs);
+
+  state.conversations.set(sessionId, {
+    id: sessionId,
+    pairKey,
+    aId: a.id,
+    bId: b.id,
+    maxPairs,
+    pairCount: 0,
+    nextSpeakerId: openerId,
+    pendingTurn: null,
+    history: [],
+    summary: `${a.name} and ${b.name} started a conversation.`,
+    startedAt: timestamp,
   });
-  processAiQueue();
+  state.activeConversationPairs.add(pairKey);
+
+  enqueueConversationTurn(sessionId, false);
 }
 
-function processAiQueue() {
+function enqueueConversationTurn(sessionId, allowEnd) {
+  const session = state.conversations.get(sessionId);
+  if (!session) return;
+
+  state.turnQueue.push({
+    sessionId,
+    allowEnd,
+    notBefore: performance.now() + randFloat(SETTINGS.turnDelayMinMs, SETTINGS.turnDelayMaxMs),
+  });
+  processTurnQueue();
+}
+
+function processTurnQueue() {
   if (!state.aiModeActive || !state.aiEnabledByServer) return;
-  while (state.aiInFlight < state.aiConcurrency && state.aiQueue.length > 0) {
-    const item = state.aiQueue.shift();
-    if (!item) break;
-    runAiJob(item);
+
+  const now = performance.now();
+  while (state.turnInFlight < state.turnConcurrency && state.turnQueue.length > 0) {
+    const nextIndex = state.turnQueue.findIndex((job) => job.notBefore <= now);
+    if (nextIndex < 0) {
+      const soonest = Math.min(...state.turnQueue.map((job) => job.notBefore));
+      const wait = Math.max(20, Math.floor(soonest - now));
+      window.setTimeout(processTurnQueue, wait);
+      return;
+    }
+
+    const [job] = state.turnQueue.splice(nextIndex, 1);
+    runTurnJob(job);
   }
 }
 
-async function runAiJob(item) {
-  state.aiInFlight += 1;
+async function runTurnJob(job) {
+  const session = state.conversations.get(job.sessionId);
+  if (!session) return;
+
+  const speaker = findAgentById(session.nextSpeakerId);
+  const listener = findAgentById(getOtherParticipantId(session, session.nextSpeakerId));
+  if (!speaker || !listener) {
+    endConversation(session.id);
+    return;
+  }
+
+  const payload = {
+    speaker: serializeAgentForAi(speaker),
+    listener: serializeAgentForAi(listener),
+    history: session.history.slice(-10),
+    turnIndex: session.history.length,
+    maxTurns: session.maxPairs * 2,
+    allowEnd: job.allowEnd,
+  };
+
+  state.turnInFlight += 1;
   try {
-    const response = await fetch("/api/interaction", {
+    const response = await fetch("/api/conversation-turn", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        a: item.a,
-        b: item.b,
-      }),
+      body: JSON.stringify(payload),
     });
 
-    if (!response.ok) return;
+    if (!response.ok) {
+      applyTurnResult(session.id, speaker, listener, synthesizeLocalTurn(session, speaker, listener, job.allowEnd));
+      return;
+    }
+
     const data = await response.json();
-    applyAiInteraction(item.eventId, data);
+    applyTurnResult(session.id, speaker, listener, data);
   } catch {
-    // Local dialogue remains as fallback when the API call fails.
+    applyTurnResult(session.id, speaker, listener, synthesizeLocalTurn(session, speaker, listener, job.allowEnd));
   } finally {
-    state.aiInFlight -= 1;
-    processAiQueue();
+    state.turnInFlight -= 1;
+    processTurnQueue();
   }
 }
 
-function applyAiInteraction(eventId, data) {
-  const event = state.globalFeed.find((entry) => entry.id === eventId);
-  if (!event) return;
+function applyTurnResult(sessionId, speaker, listener, data) {
+  const session = state.conversations.get(sessionId);
+  if (!session) return;
 
-  const aLine = normalizeDialogLine(data.aLine, event.aName);
-  const bLine = normalizeDialogLine(data.bLine, event.bName);
-  const summary = normalizeSummary(data.summary);
-  if (!aLine || !bLine || !summary) return;
+  const line = normalizeDialogLine(data?.line, speaker.name);
+  const summary = normalizeSummary(data?.summary) || session.summary;
+  const shouldEnd = Boolean(data?.shouldEnd);
 
-  event.aLine = aLine;
-  event.bLine = bLine;
-  event.summary = summary;
-
-  for (const agent of state.agents) {
-    for (const logItem of agent.interactionLog) {
-      if (logItem.eventId !== eventId) continue;
-      logItem.summary = summary;
-      logItem.myLine = agent.id === event.aId ? aLine : bLine;
-      logItem.theirLine = agent.id === event.aId ? bLine : aLine;
-    }
-
-    for (const contact of agent.recentContacts) {
-      if (contact.eventId === eventId) {
-        contact.lastSummary = summary;
-      }
-    }
+  if (!line) {
+    endConversation(session.id);
+    return;
   }
 
-  state.selectedDirty = true;
-  state.feedDirty = true;
+  const turn = {
+    speakerId: speaker.id,
+    speakerName: speaker.name,
+    line,
+  };
+  session.history.push(turn);
+  session.summary = summary;
+
+  if (!session.pendingTurn) {
+    session.pendingTurn = turn;
+    session.nextSpeakerId = listener.id;
+    enqueueConversationTurn(session.id, true);
+    return;
+  }
+
+  const firstTurn = session.pendingTurn;
+  const secondTurn = turn;
+  session.pendingTurn = null;
+  session.pairCount += 1;
+
+  const a = findAgentById(session.aId);
+  const b = findAgentById(session.bId);
+  if (!a || !b) {
+    endConversation(session.id);
+    return;
+  }
+
+  const aLine = firstTurn.speakerId === a.id ? firstTurn.line : secondTurn.line;
+  const bLine = firstTurn.speakerId === b.id ? firstTurn.line : secondTurn.line;
+
+  registerInteractionEvent({
+    a,
+    b,
+    timestamp: state.lastTimestamp || performance.now(),
+    aLine,
+    bLine,
+    summary: session.summary,
+    conversationId: session.id,
+  });
+
+  state.pairLastInteraction.set(session.pairKey, state.lastTimestamp || performance.now());
+
+  const reachedCap = session.pairCount >= session.maxPairs;
+  if (shouldEnd || reachedCap || !state.aiModeActive) {
+    endConversation(session.id);
+    return;
+  }
+
+  session.nextSpeakerId = firstTurn.speakerId;
+  enqueueConversationTurn(session.id, false);
+}
+
+function endConversation(sessionId) {
+  const session = state.conversations.get(sessionId);
+  if (!session) return;
+
+  state.activeConversationPairs.delete(session.pairKey);
+  state.conversations.delete(sessionId);
+}
+
+function getOtherParticipantId(session, speakerId) {
+  return speakerId === session.aId ? session.bId : session.aId;
+}
+
+function synthesizeLocalTurn(session, speaker, listener, allowEnd) {
+  const local = localTurnFromSeed(session, speaker, listener, allowEnd);
+  return {
+    line: local.line,
+    shouldEnd: local.shouldEnd,
+    summary: local.summary,
+  };
+}
+
+function clearConversationState() {
+  state.activeConversationPairs.clear();
+  state.conversations.clear();
+  state.turnQueue = [];
 }
 
 function serializeAgentForAi(agent) {
@@ -653,6 +833,25 @@ function generateDialogue(a, b) {
   const summary = `${a.name} and ${b.name} ${verb} ideas about ${topic.toLowerCase()}.`;
 
   return { aLine, bLine, summary };
+}
+
+function localTurnFromSeed(session, speaker, listener, allowEnd) {
+  const idx = session.history.length;
+  const speakerFirst = speaker.name.split(" ")[0];
+  const listenerFirst = listener.name.split(" ")[0];
+  const seedLines = [
+    `${speakerFirst}: "I keep thinking about ${speaker.goal.toLowerCase()}."`,
+    `${speakerFirst}: "That connects with your point, ${listenerFirst}."`,
+    `${speakerFirst}: "Maybe we can run a small test this week."`,
+    `${speakerFirst}: "Let's keep this practical and easy to follow."`,
+  ];
+
+  const shouldEnd = session.pairCount >= session.maxPairs - 1 || (allowEnd && idx >= 4 && Math.random() < 0.32);
+  return {
+    line: seedLines[idx % seedLines.length],
+    shouldEnd,
+    summary: `${speaker.name} and ${listener.name} are discussing workable next steps.`,
+  };
 }
 
 function pruneBursts(timestamp) {
@@ -898,6 +1097,12 @@ function pick(list) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
+function randInt(min, max) {
+  const lo = Math.ceil(min);
+  const hi = Math.floor(max);
+  return Math.floor(Math.random() * (hi - lo + 1)) + lo;
+}
+
 function randFloat(min, max) {
   return min + Math.random() * (max - min);
 }
@@ -924,6 +1129,12 @@ function normalizeSummary(value) {
   if (typeof value !== "string") return null;
   const cleaned = value.trim().replace(/\s+/g, " ");
   return cleaned || null;
+}
+
+function formatCompactNumber(value) {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n)) return "0";
+  return new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(n);
 }
 
 function escapeHtml(str) {

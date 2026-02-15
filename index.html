@@ -38,6 +38,22 @@
             <span class="stat-label">Dialogue</span>
             <span class="stat-value" id="stat-dialogue">Local</span>
           </div>
+          <div class="stat">
+            <span class="stat-label">Queue</span>
+            <span class="stat-value" id="stat-queue">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">RPS</span>
+            <span class="stat-value" id="stat-rps">0/5</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Tokens/Min</span>
+            <span class="stat-value" id="stat-tpm">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Tokens/Day</span>
+            <span class="stat-value" id="stat-tpd">0</span>
+          </div>
         </div>
         <div class="controls">
           <button id="toggle-run" type="button">Pause</button>
@@ -55,7 +71,7 @@
         <section class="card world-panel reveal">
           <div class="panel-head">
             <h2>Overhead World</h2>
-            <p>Agents roam, collide, and exchange short dialogue when they meet.</p>
+            <p>Agents roam, collide, then alternate turns until each conversation naturally ends.</p>
           </div>
           <div class="world-wrap">
             <canvas id="world-canvas" aria-label="Agent world simulation"></canvas>
