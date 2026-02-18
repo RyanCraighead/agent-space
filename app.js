@@ -11,7 +11,14 @@ const SETTINGS = {
   maxConversationPairs: 6,
   turnDelayMinMs: 320,
   turnDelayMaxMs: 760,
+  rosterPageSize: 12,
+  feedPageSize: 10,
+  contactPageSize: 6,
+  logPageSize: 6,
 };
+
+const DEFAULT_CEREBRAS_API_KEY = "csk-yxrpv3cf5np6xwtwyrx3dxekhc48evmkn5wnn8c9d39yc8dw";
+const API_KEY_STORAGE_KEY = "agent-space.cerebrasApiKey";
 
 const WORD_BANK = {
   firstNames: [
@@ -185,6 +192,499 @@ const WORD_BANK = {
   ],
 };
 
+const PERSONA_ARCHETYPES = [
+  {
+    role: "street cartographer",
+    traits: ["observant", "patient", "resourceful", "precise"],
+    quirks: [
+      "draws route overlays on napkins",
+      "counts steps between landmarks",
+      "keeps a notebook of curb cuts",
+    ],
+    goals: [
+      "making the city easier to navigate",
+      "improving accessibility routes",
+      "reducing commuter confusion",
+    ],
+    communicationStyles: [
+      "speaks in landmarks and examples",
+      "asks clarifying questions before suggesting options",
+      "uses practical, map-like explanations",
+    ],
+    motivations: [
+      "public spaces should work for everyone",
+      "no one should feel lost in their own neighborhood",
+      "small route improvements can save people hours each week",
+    ],
+    stressBehaviors: [
+      "sketches the problem before answering",
+      "checks assumptions out loud",
+      "switches to very concrete instructions",
+    ],
+    origins: [
+      "grew up helping neighbors find shortcuts through a maze of side streets",
+      "spent teen years volunteering at transit help desks",
+      "learned wayfinding by delivering packages across old districts",
+    ],
+    pivots: [
+      "A winter outage forced them to coordinate safe walking routes block by block.",
+      "After seeing tourists and locals get stranded during a storm, they started documenting reliable paths.",
+      "A mobility access workshop changed how they think about every intersection.",
+    ],
+    currentFocus: [
+      "audit low-visibility routes and publish clearer path guides",
+      "map calmer alternatives to high-traffic corridors",
+      "improve first-time visitor navigation without adding noise",
+    ],
+    personalRules: [
+      "If directions cannot be followed under stress, they are not done.",
+      "Maps should reduce anxiety, not add it.",
+      "Clarity beats cleverness every time.",
+    ],
+  },
+  {
+    role: "signal repairer",
+    traits: ["methodical", "steady", "calm", "exact"],
+    quirks: [
+      "labels every cable run by hand",
+      "keeps a pocket log of outage patterns",
+      "tests fixes twice before announcing success",
+    ],
+    goals: [
+      "building resilient local communications",
+      "reducing avoidable outages",
+      "improving emergency response coordination",
+    ],
+    communicationStyles: [
+      "explains failures step by step without drama",
+      "keeps updates short and actionable",
+      "translates technical issues into plain language",
+    ],
+    motivations: [
+      "people should trust essential systems",
+      "critical messages must reach people when it matters most",
+      "quiet reliability protects whole neighborhoods",
+    ],
+    stressBehaviors: [
+      "narrows scope and isolates one variable at a time",
+      "falls back to checklist discipline",
+      "becomes extra concise in updates",
+    ],
+    origins: [
+      "learned radio repair from a retired line technician",
+      "spent early years fixing salvaged devices for neighbors",
+      "was the person everyone called during local blackouts",
+    ],
+    pivots: [
+      "A multi-block blackout convinced them that redundancy matters more than speed.",
+      "A failed alert chain during a storm pushed them into infrastructure work full time.",
+      "After restoring service during an emergency, they committed to prevention over heroics.",
+    ],
+    currentFocus: [
+      "harden fragile links before peak weather season",
+      "document failure modes so teams recover faster",
+      "standardize maintenance routines across mixed hardware",
+    ],
+    personalRules: [
+      "Never trust an unverified fix.",
+      "People deserve status updates before they ask for them.",
+      "Reliability is a daily habit, not a one-time patch.",
+    ],
+  },
+  {
+    role: "community mediator",
+    traits: ["empathetic", "practical", "even-tempered", "direct"],
+    quirks: [
+      "starts difficult meetings with one grounding question",
+      "tracks recurring conflict triggers in a private notebook",
+      "brings tea to long negotiations",
+    ],
+    goals: [
+      "building trust between neighborhoods",
+      "reducing repeat conflicts",
+      "creating faster paths to shared decisions",
+    ],
+    communicationStyles: [
+      "reflects each side before proposing next steps",
+      "frames disagreements around shared outcomes",
+      "keeps conversations calm, structured, and time-bounded",
+    ],
+    motivations: [
+      "people can solve hard problems when they feel heard",
+      "preventable tension should not drain community energy",
+      "consistency builds trust faster than charisma",
+    ],
+    stressBehaviors: [
+      "slows the pace to restore clarity",
+      "summarizes points to reduce escalation",
+      "asks for concrete commitments instead of broad promises",
+    ],
+    origins: [
+      "grew up between two neighborhoods that rarely coordinated",
+      "worked service jobs where listening solved more than policy did",
+      "learned facilitation through volunteer tenant councils",
+    ],
+    pivots: [
+      "A poorly handled dispute displaced several families and changed their career path.",
+      "After preventing a major escalation at a public meeting, they committed to mediation training.",
+      "A mentor taught them how structure can reduce emotional overload in high-stakes talks.",
+    ],
+    currentFocus: [
+      "standardize conflict-response playbooks for local groups",
+      "train youth facilitators for neighborhood forums",
+      "replace rumor loops with regular cross-group check-ins",
+    ],
+    personalRules: [
+      "If both sides cannot explain each other, the conversation is not ready for decisions.",
+      "Clarity first, compromise second.",
+      "Respect is operational, not performative.",
+    ],
+  },
+  {
+    role: "field botanist",
+    traits: ["curious", "patient", "grounded", "careful"],
+    quirks: [
+      "collects seed samples in labeled tins",
+      "keeps weather notes beside plant observations",
+      "talks to plants while pruning trial beds",
+    ],
+    goals: [
+      "improving urban green resilience",
+      "expanding climate-adapted public planting",
+      "protecting overlooked native species",
+    ],
+    communicationStyles: [
+      "uses practical analogies from seasonal cycles",
+      "connects ecological choices to daily city life",
+      "prefers measured, evidence-based recommendations",
+    ],
+    motivations: [
+      "healthy ecosystems make cities calmer and safer",
+      "biodiversity should be visible in everyday spaces",
+      "long-term planning starts with small consistent care",
+    ],
+    stressBehaviors: [
+      "rechecks field data before deciding",
+      "asks for more observation time",
+      "reduces big plans into seasonal milestones",
+    ],
+    origins: [
+      "spent childhood afternoons tending rooftop gardens",
+      "learned soil and irrigation basics in a community greenhouse",
+      "started cataloging local plants while recovering from burnout",
+    ],
+    pivots: [
+      "A heatwave tree-loss event pushed them toward climate adaptation work.",
+      "After restoring a neglected lot, they saw how fast neighborhood morale can shift.",
+      "A flood season revealed which plant systems truly survive stress conditions.",
+    ],
+    currentFocus: [
+      "test drought-resistant planting mixes in public corridors",
+      "build shared maintenance plans with local volunteers",
+      "document pollinator recovery after habitat improvements",
+    ],
+    personalRules: [
+      "Plant for ten years, not one season.",
+      "If maintenance is unclear, redesign the plan.",
+      "Data should guide care, not replace care.",
+    ],
+  },
+  {
+    role: "radio host",
+    traits: ["warm", "sharp", "composed", "adaptable"],
+    quirks: [
+      "keeps handwritten cue cards for live segments",
+      "collects listener stories in color-coded folders",
+      "times transitions by breath count, not clocks",
+    ],
+    goals: [
+      "preserving overlooked stories",
+      "keeping public conversations grounded and useful",
+      "connecting isolated local groups",
+    ],
+    communicationStyles: [
+      "balances clarity with conversational warmth",
+      "asks concise follow-ups that uncover specifics",
+      "summarizes complex topics without flattening nuance",
+    ],
+    motivations: [
+      "local knowledge should not disappear between news cycles",
+      "people deserve context, not just headlines",
+      "shared stories can reduce social distance",
+    ],
+    stressBehaviors: [
+      "switches to tighter question structure",
+      "leans on prepared topic scaffolds",
+      "cuts filler and focuses on verified details",
+    ],
+    origins: [
+      "grew up in a house where the radio never turned off",
+      "started interviewing neighbors for a school archive project",
+      "learned production by volunteering weekend station shifts",
+    ],
+    pivots: [
+      "A misinformation wave during a crisis pushed them to prioritize verification workflows.",
+      "After a live call changed a local policy debate, they doubled down on civic journalism.",
+      "A mentor producer taught them how to keep hard topics human and precise.",
+    ],
+    currentFocus: [
+      "build reliable neighborhood reporting loops",
+      "train first-time callers to share actionable information",
+      "publish clear daily digests for time-poor listeners",
+    ],
+    personalRules: [
+      "If a claim cannot be traced, it does not go live.",
+      "Respect the listener's time and attention.",
+      "Keep stories specific enough to act on.",
+    ],
+  },
+  {
+    role: "bike courier",
+    traits: ["fast-thinking", "resilient", "practical", "alert"],
+    quirks: [
+      "tracks wind direction before each route",
+      "repairs gear with a custom roll of tools",
+      "keeps a pocket notebook of traffic anomalies",
+    ],
+    goals: [
+      "making daily logistics smoother",
+      "reducing delivery bottlenecks",
+      "improving street-level response times",
+    ],
+    communicationStyles: [
+      "reports issues in short operational bullets",
+      "prioritizes route alternatives over complaints",
+      "gives concise updates with clear next actions",
+    ],
+    motivations: [
+      "small delays compound into real costs for people",
+      "city logistics should feel predictable",
+      "street knowledge should inform planning decisions",
+    ],
+    stressBehaviors: [
+      "re-routes immediately and confirms by checkpoint",
+      "stays terse and high-signal",
+      "drops nonessential details to keep momentum",
+    ],
+    origins: [
+      "started as a night-shift runner for local vendors",
+      "learned route optimization by trial in heavy traffic zones",
+      "picked up repair skills because downtime was never an option",
+    ],
+    pivots: [
+      "A citywide transit disruption showed how much last-mile reliability matters.",
+      "After coordinating emergency deliveries during a storm, they became a trusted logistics contact.",
+      "An injury season pushed them to redesign routes around safer patterns.",
+    ],
+    currentFocus: [
+      "reduce avoidable route risk during peak hours",
+      "share live bottleneck maps with nearby teams",
+      "standardize handoff checkpoints for fragile deliveries",
+    ],
+    personalRules: [
+      "Fast only counts if it is safe.",
+      "Always leave a backup route.",
+      "Confirm handoffs, do not assume them.",
+    ],
+  },
+  {
+    role: "storm observer",
+    traits: ["analytical", "steady", "prepared", "attentive"],
+    quirks: [
+      "logs pressure shifts on paper before digital entry",
+      "checks the same skyline markers at sunrise and dusk",
+      "keeps emergency kits staged by scenario",
+    ],
+    goals: [
+      "improving weather readiness",
+      "reducing storm-related disruptions",
+      "making risk forecasts easier to act on",
+    ],
+    communicationStyles: [
+      "translates forecasts into clear household actions",
+      "uses confidence levels when sharing updates",
+      "keeps alerts specific to location and timing",
+    ],
+    motivations: [
+      "early warnings save lives and reduce panic",
+      "people should know what to do before impact",
+      "risk communication should be accurate and calm",
+    ],
+    stressBehaviors: [
+      "switches to checklist-based updates",
+      "broadcasts shorter but more frequent status notes",
+      "prioritizes high-risk zones first",
+    ],
+    origins: [
+      "grew up in a flood-prone district where forecasts were daily life",
+      "learned observation habits from an emergency volunteer team",
+      "started weather logging to support local preparedness groups",
+    ],
+    pivots: [
+      "A near-miss flood event convinced them to standardize neighborhood alerts.",
+      "After seeing confusing forecasts cause bad decisions, they focused on plain-language warning systems.",
+      "A severe storm season drove them into full-time monitoring work.",
+    ],
+    currentFocus: [
+      "tighten neighborhood alert timing windows",
+      "map repeat hazard pockets by microclimate patterns",
+      "improve public understanding of uncertainty in forecasts",
+    ],
+    personalRules: [
+      "Accuracy first, urgency second.",
+      "Warnings must include clear next actions.",
+      "If people cannot interpret it quickly, rewrite it.",
+    ],
+  },
+  {
+    role: "urban beekeeper",
+    traits: ["careful", "curious", "steady", "gentle"],
+    quirks: [
+      "names each hive by location trait",
+      "records nectar flow like a field journal",
+      "checks pollen diversity before expanding colonies",
+    ],
+    goals: [
+      "supporting pollinator health in dense neighborhoods",
+      "improving local biodiversity awareness",
+      "building practical education around urban ecology",
+    ],
+    communicationStyles: [
+      "explains ecology through everyday examples",
+      "frames risk in calm practical terms",
+      "teaches by demonstration and repetition",
+    ],
+    motivations: [
+      "pollinators are a visible indicator of ecosystem health",
+      "urban nature should feel tangible and teachable",
+      "small habitat decisions scale into citywide impact",
+    ],
+    stressBehaviors: [
+      "returns to routine inspection order",
+      "pauses expansion plans until stability returns",
+      "seeks second observations before intervention",
+    ],
+    origins: [
+      "started with one borrowed hive on a shared rooftop",
+      "learned colony care through weekend cooperative programs",
+      "was pulled in after volunteering on pollinator surveys",
+    ],
+    pivots: [
+      "A sudden colony collapse pushed them to focus on habitat quality over output.",
+      "After teaching kids how pollination works, they expanded into public workshops.",
+      "A pesticide incident led them to organize neighborhood planting agreements.",
+    ],
+    currentFocus: [
+      "connect isolated pollinator pockets with better planting corridors",
+      "improve hive resilience during heat spikes",
+      "pair public education with measurable habitat improvements",
+    ],
+    personalRules: [
+      "Healthy habitat beats short-term yield.",
+      "Teach while you build.",
+      "Observe twice before you intervene.",
+    ],
+  },
+  {
+    role: "public muralist",
+    traits: ["expressive", "disciplined", "collaborative", "reflective"],
+    quirks: [
+      "tests color palettes against different daylight angles",
+      "keeps voice notes of community feedback during drafts",
+      "starts every concept with a single story sentence",
+    ],
+    goals: [
+      "preserving neighborhood identity through public art",
+      "creating spaces where people feel represented",
+      "using art to support local cohesion",
+    ],
+    communicationStyles: [
+      "turns abstract ideas into visual prototypes quickly",
+      "uses story-first explanations for design choices",
+      "invites feedback in structured rounds",
+    ],
+    motivations: [
+      "public walls should reflect local memory",
+      "shared visuals can lower social distance",
+      "creative work should be accountable to place",
+    ],
+    stressBehaviors: [
+      "returns to rough sketches before refining",
+      "asks for direct critique instead of guessing",
+      "breaks large concepts into sequence panels",
+    ],
+    origins: [
+      "grew up painting temporary signs for small businesses",
+      "learned composition by restoring old neighborhood murals",
+      "started as a poster artist for community events",
+    ],
+    pivots: [
+      "A mural restoration project connected them with elders who reshaped their approach.",
+      "After a contested design process, they adopted stronger co-design methods.",
+      "A vandalism incident led them to build more community ownership into each project.",
+    ],
+    currentFocus: [
+      "co-design murals with youth and longtime residents",
+      "pair visual storytelling with local oral history",
+      "build maintenance plans so works age well",
+    ],
+    personalRules: [
+      "If locals cannot see themselves in the piece, start over.",
+      "Context before style.",
+      "Co-design is part of the artwork, not prework.",
+    ],
+  },
+  {
+    role: "water systems tech",
+    traits: ["practical", "focused", "calm", "systematic"],
+    quirks: [
+      "keeps pressure readings on index cards by zone",
+      "labels valves with both map and street names",
+      "runs mini drills for uncommon failure cases",
+    ],
+    goals: [
+      "improving water reliability",
+      "reducing leak-related disruptions",
+      "hardening critical utility infrastructure",
+    ],
+    communicationStyles: [
+      "explains tradeoffs with concrete operational impacts",
+      "uses incident timelines to prevent repeat errors",
+      "keeps stakeholders aligned on priorities and dependencies",
+    ],
+    motivations: [
+      "utility failures hit vulnerable residents first",
+      "preventive maintenance is cheaper than crisis response",
+      "infrastructure trust is built through consistency",
+    ],
+    stressBehaviors: [
+      "segments the system and isolates fault domains",
+      "moves to strict incident command language",
+      "deprioritizes noncritical work immediately",
+    ],
+    origins: [
+      "started in facility maintenance and moved into district systems",
+      "learned utility troubleshooting from night emergency crews",
+      "built core skills while restoring aging pipe networks",
+    ],
+    pivots: [
+      "A contamination scare pushed them toward stricter monitoring discipline.",
+      "After managing a difficult winter break, they focused on preventative planning.",
+      "A mentorship with senior operators changed their approach to documentation.",
+    ],
+    currentFocus: [
+      "reduce response time for high-impact failures",
+      "modernize sensor coverage in old network sections",
+      "improve cross-team incident handoff quality",
+    ],
+    personalRules: [
+      "Document first, then optimize.",
+      "No fix is complete without a prevention step.",
+      "Critical systems need calm communication.",
+    ],
+  },
+];
+
 const canvas = document.getElementById("world-canvas");
 const ctx = canvas.getContext("2d");
 
@@ -192,8 +692,15 @@ const ui = {
   toggleRun: document.getElementById("toggle-run"),
   regenWorld: document.getElementById("regen-world"),
   toggleAi: document.getElementById("toggle-ai"),
+  openApiTrace: document.getElementById("open-api-trace"),
+  openWebLlm: document.getElementById("open-web-llm"),
+  openConversationLab: document.getElementById("open-conversation-lab"),
+  apiKey: document.getElementById("api-key"),
   applyCount: document.getElementById("apply-count"),
   speed: document.getElementById("speed"),
+  moveSpeed: document.getElementById("move-speed"),
+  agentSize: document.getElementById("agent-size"),
+  spaceSize: document.getElementById("space-size"),
   agentCount: document.getElementById("agent-count"),
   statAgents: document.getElementById("stat-agents"),
   statInteractions: document.getElementById("stat-interactions"),
@@ -216,6 +723,9 @@ const state = {
   interactionCounter: 0,
   running: true,
   speedMultiplier: 1,
+  movementSpeedMultiplier: 1,
+  agentSizeMultiplier: 1,
+  spaceScale: 1,
   selectedAgentId: null,
   world: { width: 900, height: 580 },
   lastTimestamp: 0,
@@ -223,8 +733,10 @@ const state = {
   selectedDirty: true,
   feedDirty: true,
   aiEnabledByServer: false,
+  supportsClientApiKey: false,
   aiModeActive: false,
   aiProviderModel: "zai-glm-4.7",
+  apiKey: "",
   activeConversationPairs: new Set(),
   conversations: new Map(),
   conversationCounter: 0,
@@ -232,6 +744,13 @@ const state = {
   turnInFlight: 0,
   turnConcurrency: 3,
   limitsPollTimer: null,
+  talkingAgentCounts: new Map(),
+  pagination: {
+    rosterPage: 1,
+    feedPage: 1,
+    contactsPage: 1,
+    logPage: 1,
+  },
 };
 
 const palette = [
@@ -253,6 +772,7 @@ let worldBoundsEl = null;
 init();
 
 function init() {
+  state.apiKey = loadStoredApiKey();
   worldBoundsEl = canvas.parentElement;
   bindUi();
   resizeCanvas();
@@ -266,10 +786,23 @@ function init() {
 function bindUi() {
   ui.toggleAi.disabled = true;
   ui.toggleAi.title = "Set CEREBRAS_API_KEY in the backend to enable AI dialogue.";
+  ui.apiKey.value = state.apiKey;
 
   ui.speed.addEventListener("input", () => {
     state.speedMultiplier = Number(ui.speed.value);
     ui.statSpeed.textContent = `${state.speedMultiplier.toFixed(1)}x`;
+  });
+
+  ui.moveSpeed.addEventListener("input", () => {
+    state.movementSpeedMultiplier = Number(ui.moveSpeed.value);
+  });
+
+  ui.agentSize.addEventListener("input", () => {
+    setAgentSizeScale(Number(ui.agentSize.value));
+  });
+
+  ui.spaceSize.addEventListener("input", () => {
+    setSpaceScale(Number(ui.spaceSize.value));
   });
 
   ui.toggleRun.addEventListener("click", () => {
@@ -282,7 +815,7 @@ function bindUi() {
   });
 
   ui.toggleAi.addEventListener("click", () => {
-    if (!state.aiEnabledByServer) return;
+    if (!canUseAiProvider()) return;
     state.aiModeActive = !state.aiModeActive;
     if (!state.aiModeActive) {
       clearConversationState();
@@ -291,10 +824,40 @@ function bindUi() {
     processTurnQueue();
   });
 
+  ui.openApiTrace.addEventListener("click", () => {
+    window.open("./api-trace.html", "_blank", "noopener,noreferrer");
+  });
+
+  ui.openWebLlm.addEventListener("click", () => {
+    window.open("./web-llm.html", "_blank", "noopener,noreferrer");
+  });
+
+  ui.openConversationLab.addEventListener("click", () => {
+    window.open("./conversation-lab.html", "_blank", "noopener,noreferrer");
+  });
+
+  ui.apiKey.addEventListener("input", () => {
+    setApiKey(ui.apiKey.value);
+  });
+
+  ui.apiKey.addEventListener("change", () => {
+    setApiKey(ui.apiKey.value, true);
+  });
+
+  ui.apiKey.addEventListener("blur", () => {
+    setApiKey(ui.apiKey.value, true);
+  });
+
   ui.applyCount.addEventListener("click", () => {
     const nextCount = clamp(Number(ui.agentCount.value) || SETTINGS.initialAgentCount, 8, 140);
     ui.agentCount.value = String(nextCount);
     createWorld(nextCount);
+  });
+
+  ui.agentCount.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    ui.applyCount.click();
   });
 
   canvas.addEventListener("click", handleCanvasClick);
@@ -315,11 +878,13 @@ async function loadAiConfig() {
     const config = await response.json();
 
     state.aiEnabledByServer = Boolean(config.cerebrasEnabled);
+    state.supportsClientApiKey = Boolean(config.supportsClientApiKey);
     state.aiProviderModel = config.model || "zai-glm-4.7";
-    state.aiModeActive = state.aiEnabledByServer;
+    state.aiModeActive = canUseAiProvider();
     renderLimitStats(config.limits);
   } catch {
     state.aiEnabledByServer = false;
+    state.supportsClientApiKey = false;
     state.aiModeActive = false;
   }
 
@@ -327,12 +892,20 @@ async function loadAiConfig() {
 }
 
 function syncAiUi() {
-  ui.toggleAi.disabled = !state.aiEnabledByServer;
+  const aiAvailable = canUseAiProvider();
+  if (!aiAvailable && state.aiModeActive) {
+    state.aiModeActive = false;
+    clearConversationState();
+  }
+
+  ui.toggleAi.disabled = !aiAvailable;
   ui.toggleAi.textContent = state.aiModeActive ? "AI: On" : "AI: Off";
   ui.statDialogue.textContent = state.aiModeActive ? "Cerebras" : "Local";
-  ui.toggleAi.title = state.aiEnabledByServer
+  ui.toggleAi.title = aiAvailable
     ? `Model: ${state.aiProviderModel}`
-    : "Set CEREBRAS_API_KEY in the backend to enable AI dialogue.";
+    : state.supportsClientApiKey
+      ? "Enter a Cerebras API key to enable AI dialogue."
+      : "Set CEREBRAS_API_KEY in the backend to enable AI dialogue.";
 }
 
 function startLimitsPolling() {
@@ -371,12 +944,26 @@ function renderLimitStats(limits = {}, usage = {}, queue = {}) {
 
 function resizeCanvas() {
   const rect = worldBoundsEl.getBoundingClientRect();
-  state.world.width = Math.max(360, rect.width);
-  state.world.height = Math.max(320, rect.height);
+  const displayWidth = Math.max(360, rect.width);
+  const displayHeight = Math.max(320, rect.height);
+  const previousWidth = state.world.width || displayWidth;
+  const previousHeight = state.world.height || displayHeight;
 
-  canvas.width = Math.floor(state.world.width * dpr);
-  canvas.height = Math.floor(state.world.height * dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  state.world.width = displayWidth * state.spaceScale;
+  state.world.height = displayHeight * state.spaceScale;
+
+  canvas.width = Math.floor(displayWidth * dpr);
+  canvas.height = Math.floor(displayHeight * dpr);
+  ctx.setTransform(dpr / state.spaceScale, 0, 0, dpr / state.spaceScale, 0, 0);
+
+  if (!state.agents.length) return;
+
+  const ratioX = state.world.width / Math.max(1, previousWidth);
+  const ratioY = state.world.height / Math.max(1, previousHeight);
+  for (const agent of state.agents) {
+    agent.x = clamp(agent.x * ratioX, agent.radius, state.world.width - agent.radius);
+    agent.y = clamp(agent.y * ratioY, agent.radius, state.world.height - agent.radius);
+  }
 }
 
 function createWorld(agentCount) {
@@ -387,6 +974,10 @@ function createWorld(agentCount) {
   state.interactionCounter = 0;
   state.selectedAgentId = null;
   clearConversationState();
+  state.pagination.rosterPage = 1;
+  state.pagination.feedPage = 1;
+  state.pagination.contactsPage = 1;
+  state.pagination.logPage = 1;
 
   for (let i = 0; i < agentCount; i += 1) {
     state.agents.push(makeAgent(i + 1));
@@ -404,12 +995,14 @@ function createWorld(agentCount) {
 
 function makeAgent(id) {
   const persona = generatePersona(id);
-  const radius = randFloat(SETTINGS.minRadius, SETTINGS.maxRadius);
+  const baseRadius = randFloat(SETTINGS.minRadius, SETTINGS.maxRadius);
+  const radius = baseRadius * state.agentSizeMultiplier;
 
   return {
     id,
     x: randFloat(radius, state.world.width - radius),
     y: randFloat(radius, state.world.height - radius),
+    baseRadius,
     radius,
     heading: randFloat(0, Math.PI * 2),
     targetHeading: randFloat(0, Math.PI * 2),
@@ -427,22 +1020,35 @@ function generatePersona(seed) {
   const first = pick(WORD_BANK.firstNames);
   const last = pick(WORD_BANK.lastNames);
   const name = `${first} ${last}`;
-  const role = pick(WORD_BANK.roles);
-  const trait = pick(WORD_BANK.traits);
-  const quirk = pick(WORD_BANK.quirks);
-  const goal = pick(WORD_BANK.goals);
+  const archetype = pick(PERSONA_ARCHETYPES);
+  const role = archetype.role;
+  const trait = pick(archetype.traits);
+  const secondaryTrait = pickDifferent(archetype.traits, trait);
+  const quirk = pick(archetype.quirks);
+  const goal = pick(archetype.goals);
+  const communicationStyle = pick(archetype.communicationStyles);
+  const motivation = pick(archetype.motivations);
+  const stressBehavior = pick(archetype.stressBehaviors);
+  const personalRule = pick(archetype.personalRules);
 
-  const lifeStory = `${first} ${pick(WORD_BANK.origins)}. ${pick(WORD_BANK.pivots)} ${pick(
-    WORD_BANK.nowLines
-  )}`;
+  const lifeStory = `${first} ${pick(archetype.origins)}. ${pick(archetype.pivots)} Now they work as a ${role} and focus on ${pick(
+    archetype.currentFocus
+  )}. Their personal rule is: "${personalRule}"`;
+  const personalitySummary = `${first} is ${trait} and ${secondaryTrait}, usually ${communicationStyle.toLowerCase()}. They are driven by ${motivation.toLowerCase()} and tend to ${stressBehavior.toLowerCase()} when pressure spikes.`;
 
   return {
     seed,
     name,
     role,
     trait,
+    secondaryTrait,
     quirk,
     goal,
+    communicationStyle,
+    motivation,
+    stressBehavior,
+    personalRule,
+    personalitySummary,
     lifeStory,
   };
 }
@@ -472,6 +1078,10 @@ function update(deltaSeconds, timestamp) {
 
 function updateAgents(deltaSeconds) {
   for (const agent of state.agents) {
+    if (isAgentTalking(agent.id)) {
+      continue;
+    }
+
     agent.headingTimer -= deltaSeconds;
     if (agent.headingTimer <= 0) {
       agent.targetHeading = randFloat(0, Math.PI * 2);
@@ -481,7 +1091,7 @@ function updateAgents(deltaSeconds) {
     const headingDiff = normalizeAngle(agent.targetHeading - agent.heading);
     agent.heading += headingDiff * Math.min(1, deltaSeconds * 1.8);
 
-    const velocity = SETTINGS.baseSpeed * agent.speedFactor;
+    const velocity = SETTINGS.baseSpeed * state.movementSpeedMultiplier * agent.speedFactor;
     agent.x += Math.cos(agent.heading) * velocity * deltaSeconds;
     agent.y += Math.sin(agent.heading) * velocity * deltaSeconds;
 
@@ -516,20 +1126,31 @@ function resolveCollisions(timestamp) {
       const ny = dy / distance;
       const overlap = minDistance - distance;
 
-      a.x -= nx * overlap * 0.5;
-      a.y -= ny * overlap * 0.5;
-      b.x += nx * overlap * 0.5;
-      b.y += ny * overlap * 0.5;
+      const aTalking = isAgentTalking(a.id);
+      const bTalking = isAgentTalking(b.id);
+
+      if (aTalking && !bTalking) {
+        b.x += nx * overlap;
+        b.y += ny * overlap;
+      } else if (!aTalking && bTalking) {
+        a.x -= nx * overlap;
+        a.y -= ny * overlap;
+      } else if (!aTalking && !bTalking) {
+        a.x -= nx * overlap * 0.5;
+        a.y -= ny * overlap * 0.5;
+        b.x += nx * overlap * 0.5;
+        b.y += ny * overlap * 0.5;
+      }
 
       const pairKey = makePairKey(a.id, b.id);
-      if (state.activeConversationPairs.has(pairKey)) {
+      if (aTalking || bTalking || state.activeConversationPairs.has(pairKey)) {
         continue;
       }
 
       const lastAt = state.pairLastInteraction.get(pairKey) || 0;
       if (timestamp - lastAt >= SETTINGS.interactionCooldownMs) {
         state.pairLastInteraction.set(pairKey, timestamp);
-        if (state.aiModeActive && state.aiEnabledByServer) {
+        if (state.aiModeActive && canUseAiProvider()) {
           startAiConversation(a, b, pairKey, timestamp);
         } else {
           registerLocalInteraction(a, b, timestamp);
@@ -576,6 +1197,7 @@ function registerInteractionEvent({ a, b, timestamp, aLine, bLine, summary, conv
   if (state.globalFeed.length > SETTINGS.maxGlobalFeed) {
     state.globalFeed.pop();
   }
+  state.pagination.feedPage = 1;
 
   pushAgentMemory(a, b, event);
   pushAgentMemory(b, a, event);
@@ -641,6 +1263,8 @@ function startAiConversation(a, b, pairKey, timestamp) {
     startedAt: timestamp,
   });
   state.activeConversationPairs.add(pairKey);
+  markAgentTalking(a.id);
+  markAgentTalking(b.id);
 
   enqueueConversationTurn(sessionId, false);
 }
@@ -658,7 +1282,7 @@ function enqueueConversationTurn(sessionId, allowEnd) {
 }
 
 function processTurnQueue() {
-  if (!state.aiModeActive || !state.aiEnabledByServer) return;
+  if (!state.aiModeActive || !canUseAiProvider()) return;
 
   const now = performance.now();
   while (state.turnInFlight < state.turnConcurrency && state.turnQueue.length > 0) {
@@ -697,9 +1321,16 @@ async function runTurnJob(job) {
 
   state.turnInFlight += 1;
   try {
+    const headers = {
+      "Content-Type": "application/json",
+    };
+    if (state.apiKey) {
+      headers["x-cerebras-api-key"] = state.apiKey;
+    }
+
     const response = await fetch("/api/conversation-turn", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(payload),
     });
 
@@ -788,6 +1419,8 @@ function endConversation(sessionId) {
   if (!session) return;
 
   state.activeConversationPairs.delete(session.pairKey);
+  unmarkAgentTalking(session.aId);
+  unmarkAgentTalking(session.bId);
   state.conversations.delete(sessionId);
 }
 
@@ -805,9 +1438,14 @@ function synthesizeLocalTurn(session, speaker, listener, allowEnd) {
 }
 
 function clearConversationState() {
+  for (const session of state.conversations.values()) {
+    unmarkAgentTalking(session.aId);
+    unmarkAgentTalking(session.bId);
+  }
   state.activeConversationPairs.clear();
   state.conversations.clear();
   state.turnQueue = [];
+  state.talkingAgentCounts.clear();
 }
 
 function serializeAgentForAi(agent) {
@@ -816,20 +1454,26 @@ function serializeAgentForAi(agent) {
     name: agent.name,
     role: agent.role,
     trait: agent.trait,
+    secondaryTrait: agent.secondaryTrait,
     quirk: agent.quirk,
     goal: agent.goal,
+    communicationStyle: agent.communicationStyle,
+    motivation: agent.motivation,
+    stressBehavior: agent.stressBehavior,
+    personalRule: agent.personalRule,
+    personalitySummary: agent.personalitySummary,
     lifeStory: agent.lifeStory,
   };
 }
 
 function generateDialogue(a, b) {
-  const topic = pick([a.goal, b.goal, "shared routines", "street logistics", "neighbor coordination"]);
+  const topic = pick([a.goal, b.goal, a.motivation || "shared routines", b.motivation || "street logistics"]);
   const opener = pick(WORD_BANK.openers);
   const reply = pick(WORD_BANK.replies);
   const verb = pick(WORD_BANK.verbs);
 
-  const aLine = `${a.name.split(" ")[0]}: "${opener} - I'm focused on ${a.goal.toLowerCase()}."`;
-  const bLine = `${b.name.split(" ")[0]}: "${reply}. My ${b.quirk.toLowerCase()} helps when ${topic.toLowerCase()} gets messy."`;
+  const aLine = `${a.name.split(" ")[0]}: "${opener} - I am focused on ${a.goal.toLowerCase()}."`;
+  const bLine = `${b.name.split(" ")[0]}: "${reply}. ${b.communicationStyle || "I keep it practical"} and ${b.quirk.toLowerCase()} helps when ${topic.toLowerCase()} gets messy."`;
   const summary = `${a.name} and ${b.name} ${verb} ideas about ${topic.toLowerCase()}.`;
 
   return { aLine, bLine, summary };
@@ -840,10 +1484,10 @@ function localTurnFromSeed(session, speaker, listener, allowEnd) {
   const speakerFirst = speaker.name.split(" ")[0];
   const listenerFirst = listener.name.split(" ")[0];
   const seedLines = [
-    `${speakerFirst}: "I keep thinking about ${speaker.goal.toLowerCase()}."`,
-    `${speakerFirst}: "That connects with your point, ${listenerFirst}."`,
-    `${speakerFirst}: "Maybe we can run a small test this week."`,
-    `${speakerFirst}: "Let's keep this practical and easy to follow."`,
+    `${speakerFirst}: "I keep thinking about ${speaker.goal.toLowerCase()} and how to make it more practical."`,
+    `${speakerFirst}: "That connects with your point, ${listenerFirst}. ${speaker.communicationStyle || "I want to keep this clear and actionable"}."`,
+    `${speakerFirst}: "Maybe we can run a small test this week, then adjust from what we learn."`,
+    `${speakerFirst}: "Under pressure I usually ${speaker.stressBehavior || "slow down and structure the next step"}, so this is what I suggest next."`,
   ];
 
   const shouldEnd = session.pairCount >= session.maxPairs - 1 || (allowEnd && idx >= 4 && Math.random() < 0.32);
@@ -949,9 +1593,11 @@ function flushDirtyUi() {
 }
 
 function renderRoster() {
-  const rows = state.agents
-    .slice()
-    .sort((a, b) => b.interactionCount - a.interactionCount)
+  const sortedAgents = state.agents.slice().sort((a, b) => b.interactionCount - a.interactionCount);
+  const page = paginate(sortedAgents, state.pagination.rosterPage, SETTINGS.rosterPageSize);
+  state.pagination.rosterPage = page.page;
+
+  const rows = page.items
     .map((agent) => {
       const selectedClass = agent.id === state.selectedAgentId ? "selected" : "";
       return `<button class="roster-row ${selectedClass}" data-id="${agent.id}">
@@ -963,14 +1609,21 @@ function renderRoster() {
     })
     .join("");
 
-  ui.agentRoster.innerHTML = rows;
+  ui.agentRoster.innerHTML = `${rows || "<p class='empty-feed'>No agents.</p>"}${renderPager("roster", page.page, page.totalPages)}`;
   ui.agentRoster.querySelectorAll(".roster-row").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = Number(btn.dataset.id);
       state.selectedAgentId = id;
+      state.pagination.contactsPage = 1;
+      state.pagination.logPage = 1;
       state.rosterDirty = true;
       state.selectedDirty = true;
     });
+  });
+
+  wirePager(ui.agentRoster, "roster", (action) => {
+    state.pagination.rosterPage += action === "next" ? 1 : -1;
+    state.rosterDirty = true;
   });
 }
 
@@ -981,6 +1634,11 @@ function renderSelectedAgent() {
     ui.selectedAgent.innerHTML = "<p>No agent selected.</p>";
     return;
   }
+
+  const contactPage = paginate(agent.recentContacts, state.pagination.contactsPage, SETTINGS.contactPageSize);
+  const logPage = paginate(agent.interactionLog, state.pagination.logPage, SETTINGS.logPageSize);
+  state.pagination.contactsPage = contactPage.page;
+  state.pagination.logPage = logPage.page;
 
   ui.selectedAgent.className = "selected-agent";
   ui.selectedAgent.innerHTML = `
@@ -993,16 +1651,16 @@ function renderSelectedAgent() {
     </div>
     <div class="agent-tags">
       <span>${escapeHtml(agent.trait)}</span>
+      <span>${escapeHtml(agent.secondaryTrait || "")}</span>
       <span>${escapeHtml(agent.quirk)}</span>
-      <span>${escapeHtml(agent.goal)}</span>
     </div>
+    <p class="story">${escapeHtml(agent.personalitySummary || "")}</p>
     <p class="story">${escapeHtml(agent.lifeStory)}</p>
     <div class="memory-grid">
       <div>
         <h4>Recent Contacts (${agent.recentContacts.length}/100)</h4>
         <div class="memory-list">
-          ${agent.recentContacts
-            .slice(0, 100)
+          ${contactPage.items
             .map(
               (entry) => `
               <article>
@@ -1013,12 +1671,12 @@ function renderSelectedAgent() {
             )
             .join("") || "<p>No contacts yet.</p>"}
         </div>
+        ${renderPager("contacts", contactPage.page, contactPage.totalPages)}
       </div>
       <div>
         <h4>Interaction Log (${agent.interactionLog.length}/100)</h4>
         <div class="memory-list">
-          ${agent.interactionLog
-            .slice(0, 100)
+          ${logPage.items
             .map(
               (entry) => `
               <article>
@@ -1030,14 +1688,27 @@ function renderSelectedAgent() {
             )
             .join("") || "<p>No interactions logged yet.</p>"}
         </div>
+        ${renderPager("log", logPage.page, logPage.totalPages)}
       </div>
     </div>
   `;
+
+  wirePager(ui.selectedAgent, "contacts", (action) => {
+    state.pagination.contactsPage += action === "next" ? 1 : -1;
+    state.selectedDirty = true;
+  });
+
+  wirePager(ui.selectedAgent, "log", (action) => {
+    state.pagination.logPage += action === "next" ? 1 : -1;
+    state.selectedDirty = true;
+  });
 }
 
 function renderFeed() {
-  const items = state.globalFeed
-    .slice(0, 120)
+  const page = paginate(state.globalFeed, state.pagination.feedPage, SETTINGS.feedPageSize);
+  state.pagination.feedPage = page.page;
+
+  const items = page.items
     .map(
       (entry) => `
       <article class="feed-item">
@@ -1053,13 +1724,18 @@ function renderFeed() {
     )
     .join("");
 
-  ui.globalFeed.innerHTML = items || "<p class='empty-feed'>No interactions yet.</p>";
+  ui.globalFeed.innerHTML = `${items || "<p class='empty-feed'>No interactions yet.</p>"}${renderPager("feed", page.page, page.totalPages)}`;
+
+  wirePager(ui.globalFeed, "feed", (action) => {
+    state.pagination.feedPage += action === "next" ? 1 : -1;
+    state.feedDirty = true;
+  });
 }
 
 function handleCanvasClick(event) {
   const rect = canvas.getBoundingClientRect();
-  const x = event.clientX - rect.left;
-  const y = event.clientY - rect.top;
+  const x = (event.clientX - rect.left) * state.spaceScale;
+  const y = (event.clientY - rect.top) * state.spaceScale;
 
   let nearest = null;
   let nearestDist = Number.POSITIVE_INFINITY;
@@ -1079,6 +1755,8 @@ function handleCanvasClick(event) {
   } else {
     state.selectedAgentId = null;
   }
+  state.pagination.contactsPage = 1;
+  state.pagination.logPage = 1;
 
   state.rosterDirty = true;
   state.selectedDirty = true;
@@ -1089,12 +1767,139 @@ function findAgentById(id) {
   return state.agents.find((agent) => agent.id === id) || null;
 }
 
+function isAgentTalking(agentId) {
+  return (state.talkingAgentCounts.get(agentId) || 0) > 0;
+}
+
+function markAgentTalking(agentId) {
+  state.talkingAgentCounts.set(agentId, (state.talkingAgentCounts.get(agentId) || 0) + 1);
+}
+
+function unmarkAgentTalking(agentId) {
+  const next = (state.talkingAgentCounts.get(agentId) || 0) - 1;
+  if (next <= 0) {
+    state.talkingAgentCounts.delete(agentId);
+  } else {
+    state.talkingAgentCounts.set(agentId, next);
+  }
+}
+
+function paginate(items, requestedPage, pageSize) {
+  const totalItems = Array.isArray(items) ? items.length : 0;
+  const safeSize = Math.max(1, pageSize);
+  const totalPages = Math.max(1, Math.ceil(totalItems / safeSize));
+  const page = clamp(Number(requestedPage) || 1, 1, totalPages);
+  const start = (page - 1) * safeSize;
+  const end = start + safeSize;
+  const pageItems = items.slice(start, end);
+
+  return {
+    items: pageItems,
+    page,
+    totalPages,
+  };
+}
+
+function renderPager(scope, page, totalPages) {
+  if (totalPages <= 1) return "";
+  const prevDisabled = page <= 1 ? "disabled" : "";
+  const nextDisabled = page >= totalPages ? "disabled" : "";
+
+  return `
+    <div class="pager" data-pager-scope="${scope}">
+      <button type="button" class="pager-btn" data-pager-action="prev" ${prevDisabled}>Prev</button>
+      <span class="pager-label">Page ${page}/${totalPages}</span>
+      <button type="button" class="pager-btn" data-pager-action="next" ${nextDisabled}>Next</button>
+    </div>
+  `;
+}
+
+function wirePager(root, scope, onMove) {
+  const pager = root.querySelector(`[data-pager-scope="${scope}"]`);
+  if (!pager) return;
+
+  pager.querySelectorAll("[data-pager-action]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.hasAttribute("disabled")) return;
+      onMove(btn.dataset.pagerAction);
+    });
+  });
+}
+
+function loadStoredApiKey() {
+  try {
+    const stored = window.localStorage.getItem(API_KEY_STORAGE_KEY);
+    if (stored !== null) return String(stored).trim();
+  } catch {
+    // Ignore storage access failures and use fallback.
+  }
+  return DEFAULT_CEREBRAS_API_KEY;
+}
+
+function saveApiKey(value) {
+  try {
+    window.localStorage.setItem(API_KEY_STORAGE_KEY, value);
+  } catch {
+    // Ignore storage write failures.
+  }
+}
+
+function setApiKey(nextValue, persist = false) {
+  state.apiKey = String(nextValue || "").trim();
+
+  if (ui.apiKey.value !== state.apiKey) {
+    ui.apiKey.value = state.apiKey;
+  }
+
+  if (persist) {
+    saveApiKey(state.apiKey);
+  }
+
+  syncAiUi();
+}
+
+function canUseAiProvider() {
+  return state.aiEnabledByServer || (state.supportsClientApiKey && Boolean(state.apiKey));
+}
+
+function setSpaceScale(nextScale) {
+  const safeScale = clamp(Number(nextScale) || 1, 0.6, 2.4);
+  if (state.spaceScale === safeScale) return;
+  state.spaceScale = safeScale;
+  resizeCanvas();
+}
+
+function setAgentSizeScale(nextScale) {
+  const safeScale = clamp(Number(nextScale) || 1, 0.6, 2.2);
+  state.agentSizeMultiplier = safeScale;
+
+  for (const agent of state.agents) {
+    const baseRadius = Number(agent.baseRadius || agent.radius || SETTINGS.minRadius);
+    agent.baseRadius = baseRadius;
+    agent.radius = baseRadius * state.agentSizeMultiplier;
+    agent.x = clamp(agent.x, agent.radius, state.world.width - agent.radius);
+    agent.y = clamp(agent.y, agent.radius, state.world.height - agent.radius);
+  }
+}
+
 function makePairKey(a, b) {
   return a < b ? `${a}-${b}` : `${b}-${a}`;
 }
 
 function pick(list) {
   return list[Math.floor(Math.random() * list.length)];
+}
+
+function pickDifferent(list, current) {
+  if (!Array.isArray(list) || list.length === 0) return current;
+  if (list.length === 1) return list[0];
+  let next = current;
+  let guard = 0;
+  while (next === current && guard < 12) {
+    next = pick(list);
+    guard += 1;
+  }
+  return next;
 }
 
 function randInt(min, max) {
@@ -1121,8 +1926,15 @@ function normalizeDialogLine(value, speakerName) {
   if (typeof value !== "string") return null;
   const cleaned = value.trim().replace(/\s+/g, " ");
   if (!cleaned) return null;
-  const startsWithName = cleaned.toLowerCase().startsWith(`${speakerName.split(" ")[0].toLowerCase()}:`);
-  return startsWithName ? cleaned : `${speakerName.split(" ")[0]}: "${cleaned}"`;
+  const speaker = speakerName.split(" ")[0];
+  const speakerPrefix = `${speaker}:`;
+  const startsWithName = cleaned.toLowerCase().startsWith(speakerPrefix.toLowerCase());
+  if (startsWithName) {
+    const body = cleaned.slice(speakerPrefix.length).trim().replace(/^["']|["']$/g, "");
+    if (body.length < 4) return null;
+    return `${speakerPrefix} "${body.slice(0, 180)}"`;
+  }
+  return `${speakerPrefix} "${cleaned.slice(0, 180)}"`;
 }
 
 function normalizeSummary(value) {

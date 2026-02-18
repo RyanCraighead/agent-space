@@ -59,8 +59,19 @@
           <button id="toggle-run" type="button">Pause</button>
           <button id="regen-world" type="button">Regenerate</button>
           <button id="toggle-ai" type="button">AI: Off</button>
-          <label for="speed">Speed</label>
+          <button id="open-api-trace" type="button">Open API Trace</button>
+          <button id="open-web-llm" type="button">Open Web-LLM Tab</button>
+          <button id="open-conversation-lab" type="button">Open Conversation Lab</button>
+          <label for="api-key">API Key</label>
+          <input id="api-key" type="password" autocomplete="off" spellcheck="false" />
+          <label for="speed">Sim</label>
           <input id="speed" type="range" min="0.4" max="2.4" step="0.1" value="1" />
+          <label for="move-speed">Move</label>
+          <input id="move-speed" type="range" min="0.4" max="3" step="0.1" value="1" />
+          <label for="agent-size">Size</label>
+          <input id="agent-size" type="range" min="0.6" max="2.2" step="0.1" value="1" />
+          <label for="space-size">Space</label>
+          <input id="space-size" type="range" min="0.6" max="2.4" step="0.1" value="1" />
           <label for="agent-count">Agents</label>
           <input id="agent-count" type="number" min="8" max="140" step="1" value="42" />
           <button id="apply-count" type="button">Apply</button>

@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Conversation Lab - agent-space</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./conversation-lab.css" />
+  </head>
+  <body>
+    <div class="lab-shell">
+      <header class="card lab-header">
+        <div>
+          <h1>Conversation Lab</h1>
+          <p>Simple two-bot chat test with global runtime settings exposed.</p>
+        </div>
+        <div class="lab-header-actions">
+          <label for="lab-api-key">API Key</label>
+          <input id="lab-api-key" type="password" autocomplete="off" spellcheck="false" />
+          <button id="open-main" type="button">Open Main App</button>
+          <span id="lab-status">Loading settings...</span>
+        </div>
+      </header>
+
+      <main class="lab-grid">
+        <section class="card lab-panel">
+          <div class="panel-head">
+            <h2>Global Settings</h2>
+            <p>Changes here update runtime settings used by all bot requests.</p>
+          </div>
+          <form id="runtime-settings-form" class="lab-form">
+            <div class="row">
+              <label for="rt-model">Model</label>
+              <input id="rt-model" type="text" />
+            </div>
+            <div class="row three">
+              <div>
+                <label for="rt-temperature">Temperature</label>
+                <input id="rt-temperature" type="number" min="0" max="2" step="0.05" />
+              </div>
+              <div>
+                <label for="rt-top-p">Top P</label>
+                <input id="rt-top-p" type="number" min="0" max="1" step="0.05" />
+              </div>
+              <div>
+                <label for="rt-turn-tokens">Turn Max Tokens</label>
+                <input id="rt-turn-tokens" type="number" min="80" max="2048" step="1" />
+              </div>
+            </div>
+            <div class="row two">
+              <div>
+                <label for="rt-interaction-tokens">Interaction Max Tokens</label>
+                <input id="rt-interaction-tokens" type="number" min="80" max="4096" step="1" />
+              </div>
+              <div class="toggles">
+                <label><input id="rt-disable-reasoning" type="checkbox" /> Disable Reasoning</label>
+                <label><input id="rt-clear-thinking" type="checkbox" /> Clear Thinking</label>
+                <label><input id="rt-auto-apply" type="checkbox" checked /> Auto Apply</label>
+              </div>
+            </div>
+            <div class="row three">
+              <div>
+                <label for="rt-interaction-line-max">Interaction Line Max Chars</label>
+                <input id="rt-interaction-line-max" type="number" min="40" max="400" step="1" />
+              </div>
+              <div>
+                <label for="rt-interaction-summary-max">Interaction Summary Max</label>
+                <input id="rt-interaction-summary-max" type="number" min="40" max="400" step="1" />
+              </div>
+              <div>
+                <label for="rt-turn-line-max">Turn Line Max Chars</label>
+                <input id="rt-turn-line-max" type="number" min="40" max="400" step="1" />
+              </div>
+            </div>
+            <div class="row three">
+              <div>
+                <label for="rt-turn-summary-max">Turn Summary Max</label>
+                <input id="rt-turn-summary-max" type="number" min="40" max="400" step="1" />
+              </div>
+              <div>
+                <label for="rt-turn-min-body">Turn Min Chars After Name</label>
+                <input id="rt-turn-min-body" type="number" min="1" max="200" step="1" />
+              </div>
+              <div class="toggles">
+                <label><input id="rt-turn-no-markdown" type="checkbox" /> No Markdown</label>
+                <label><input id="rt-turn-no-stage" type="checkbox" /> No Stage Directions</label>
+                <label><input id="rt-turn-alternate" type="checkbox" /> Alternate Turns</label>
+              </div>
+            </div>
+            <div class="row">
+              <label for="rt-turn-system">Turn System Prompt</label>
+              <textarea id="rt-turn-system" rows="4"></textarea>
+            </div>
+            <div class="row">
+              <label for="rt-turn-task">Turn Task Prompt</label>
+              <textarea id="rt-turn-task" rows="3"></textarea>
+            </div>
+            <div class="row">
+              <label for="rt-interaction-system">Interaction System Prompt</label>
+              <textarea id="rt-interaction-system" rows="4"></textarea>
+            </div>
+            <div class="row">
+              <label for="rt-interaction-task">Interaction Task Prompt</label>
+              <textarea id="rt-interaction-task" rows="3"></textarea>
+            </div>
+            <div class="row">
+              <label for="rt-lab-system">Lab System Prompt</label>
+              <textarea id="rt-lab-system" rows="4"></textarea>
+            </div>
+            <div class="row">
+              <label for="rt-lab-task">Lab Task Prompt</label>
+              <textarea id="rt-lab-task" rows="3"></textarea>
+            </div>
+            <div class="actions">
+              <button id="apply-runtime-settings" type="button">Apply Settings</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="card lab-panel">
+          <div class="panel-head">
+            <h2>Two Bot Conversation</h2>
+            <p>Configure both bot system instructions and run a simple turn loop.</p>
+          </div>
+          <div class="lab-form">
+            <div class="row two">
+              <div>
+                <label for="bot-a-name">Bot A Name</label>
+                <input id="bot-a-name" type="text" value="Alpha" />
+              </div>
+              <div>
+                <label for="bot-b-name">Bot B Name</label>
+                <input id="bot-b-name" type="text" value="Beta" />
+              </div>
+            </div>
+            <div class="row two">
+              <div>
+                <label for="bot-a-system">Bot A System Instruction</label>
+                <textarea id="bot-a-system" rows="6">You are concise, practical, and collaborative.</textarea>
+              </div>
+              <div>
+                <label for="bot-b-system">Bot B System Instruction</label>
+                <textarea id="bot-b-system" rows="6">You are analytical, direct, and focused on tradeoffs.</textarea>
+              </div>
+            </div>
+            <div class="row two">
+              <div>
+                <label for="bot-a-context">Bot A Context</label>
+                <textarea id="bot-a-context" rows="4">Focus on implementation details.</textarea>
+              </div>
+              <div>
+                <label for="bot-b-context">Bot B Context</label>
+                <textarea id="bot-b-context" rows="4">Focus on architecture and risks.</textarea>
+              </div>
+            </div>
+            <div class="row three">
+              <div>
+                <label for="lab-turns">Max Turns</label>
+                <input id="lab-turns" type="number" min="2" max="48" step="1" value="12" />
+              </div>
+              <div class="toggles">
+                <label><input id="lab-allow-end" type="checkbox" checked /> Allow Natural End</label>
+              </div>
+              <div class="actions inline">
+                <button id="lab-run" type="button">Run Conversation</button>
+                <button id="lab-step" type="button">Step Once</button>
+                <button id="lab-clear" type="button">Clear Transcript</button>
+              </div>
+            </div>
+          </div>
+          <div id="lab-transcript" class="transcript"></div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="./conversation-lab.js"></script>
+  </body>
+</html>
